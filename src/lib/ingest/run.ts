@@ -1,10 +1,30 @@
+import { supabaseServer } from "@/lib/supabase/server";
 import type { Fetcher, FetcherResult } from "./types";
 import { whoFetcher } from "./sources/who";
 import { gdeltFetcher } from "./sources/gdelt";
+import {
+  pahoFetcher,
+  cdcFetcher,
+  ecdcFetcher,
+  promedFetcher,
+  googleNewsFetchers,
+} from "./sources/feeds";
+import { redditFetcher } from "./sources/reddit";
+import { blueskyFetcher } from "./sources/bluesky";
 import { upsertSources } from "./upsert";
 import { processUnextractedSources, type ProcessSummary } from "./process";
 
-const FETCHERS: Fetcher[] = [whoFetcher, gdeltFetcher];
+const FETCHERS: Fetcher[] = [
+  whoFetcher,
+  gdeltFetcher,
+  pahoFetcher,
+  cdcFetcher,
+  ecdcFetcher,
+  promedFetcher,
+  ...googleNewsFetchers,
+  redditFetcher,
+  blueskyFetcher,
+];
 
 export interface IngestRunSummary {
   per_source: Array<{
@@ -71,6 +91,16 @@ export async function runIngest(): Promise<IngestRunSummary> {
       skipped: 0,
       errors: [e instanceof Error ? e.message : String(e)],
     });
+  }
+
+  // Refresh the daily_country_totals materialized view for fast dashboard reads.
+  // Uses a SQL RPC since PostgREST can't issue REFRESH MATERIALIZED VIEW directly.
+  if (extraction.case_reports_inserted > 0) {
+    try {
+      await supabaseServer().rpc("refresh_daily_country_totals");
+    } catch {
+      // Non-fatal — view will still serve stale data; create the function next deploy
+    }
   }
 
   return {

@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { geocode } from "@/lib/geocode/nominatim";
 import type { ExtractCallResult } from "./claude";
 import type { ExtractedEventT } from "./schema";
 
@@ -50,20 +51,27 @@ export async function persistExtraction(
     return { inserted_case_reports: 0, rejected_low_confidence: rejected };
   }
 
-  const rows = accepted.map((ev) => ({
-    source_id: sourceId,
-    country_iso2: ev.country_iso2.toUpperCase(),
-    region: ev.region,
-    locality: ev.locality,
-    cases_confirmed: ev.cases_confirmed,
-    cases_suspected: ev.cases_suspected,
-    deaths: ev.deaths,
-    report_date: ev.report_date,
-    virus_strain: ev.virus_strain === "unknown" ? null : ev.virus_strain,
-    confidence: ev.confidence,
-    extraction_method: "llm" as const,
-    notes: ev.evidence_quote,
-  }));
+  // Geocode each event sequentially (Nominatim is rate-limited to 1 req/s).
+  const rows = [];
+  for (const ev of accepted) {
+    const geo = await geocode(ev.locality, ev.region, ev.country_iso2);
+    rows.push({
+      source_id: sourceId,
+      country_iso2: (geo.country_iso2 || ev.country_iso2).toUpperCase(),
+      region: ev.region,
+      locality: ev.locality,
+      lat: geo.lat,
+      lon: geo.lon,
+      cases_confirmed: ev.cases_confirmed,
+      cases_suspected: ev.cases_suspected,
+      deaths: ev.deaths,
+      report_date: ev.report_date,
+      virus_strain: ev.virus_strain === "unknown" ? null : ev.virus_strain,
+      confidence: ev.confidence,
+      extraction_method: "llm" as const,
+      notes: ev.evidence_quote,
+    });
+  }
 
   // Plain insert — re-running on same source is prevented by the extractions
   // table (we never re-extract a source). The dedupe-on-(source,country,region,

@@ -20,7 +20,10 @@ interface SourceRow {
   published_at: string | null;
 }
 
-const MAX_PER_RUN = 50;
+// Most items are prefilter-rejected at zero cost; LLM calls are bounded by
+// the small subset that pass. 200 keeps total runtime under Vercel's 60s cap
+// even when 10–15 articles need extraction.
+const MAX_PER_RUN = 200;
 
 // Find sources that have no extraction row yet, and run them through
 // prefilter → LLM → persist. Always logs an `extractions` row so each
@@ -38,19 +41,22 @@ export async function processUnextractedSources(): Promise<ProcessSummary> {
     bluesky: 1, reddit: 1, google_news: 1, gdelt: 2,
   };
   const { data: rawCandidates, error: e1 } = await sb
-    .from("sources")
+    .from("unextracted_sources")
     .select("id,url,title,body,published_at,source_type")
     .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(MAX_PER_RUN * 6); // overfetch; we'll re-rank then trim
-  const candidates = (rawCandidates ?? []).slice().sort((a, b) => {
-    const ra = AUTHORITY_RANK[a.source_type as string] ?? 9;
-    const rb = AUTHORITY_RANK[b.source_type as string] ?? 9;
-    if (ra !== rb) return ra - rb;
-    return (b.published_at ?? "").localeCompare(a.published_at ?? "");
-  });
+    .limit(MAX_PER_RUN * 2);
+  if (e1) throw new Error(`load unextracted_sources: ${e1.message}`);
+  const todo: SourceRow[] = (rawCandidates ?? [])
+    .slice()
+    .sort((a, b) => {
+      const ra = AUTHORITY_RANK[a.source_type as string] ?? 9;
+      const rb = AUTHORITY_RANK[b.source_type as string] ?? 9;
+      if (ra !== rb) return ra - rb;
+      return (b.published_at ?? "").localeCompare(a.published_at ?? "");
+    })
+    .slice(0, MAX_PER_RUN);
 
-  if (e1) throw new Error(`load sources: ${e1.message}`);
-  if (!candidates || candidates.length === 0) {
+  if (todo.length === 0) {
     return {
       scanned: 0,
       prefiltered_out: 0,
@@ -60,18 +66,6 @@ export async function processUnextractedSources(): Promise<ProcessSummary> {
       errors: 0,
     };
   }
-
-  const ids = candidates.map((c) => c.id);
-  const { data: extracted, error: e2 } = await sb
-    .from("extractions")
-    .select("source_id")
-    .in("source_id", ids);
-  if (e2) throw new Error(`load extractions: ${e2.message}`);
-  const extractedIds = new Set((extracted ?? []).map((r) => r.source_id));
-
-  const todo: SourceRow[] = candidates
-    .filter((c) => !extractedIds.has(c.id))
-    .slice(0, MAX_PER_RUN);
 
   let scanned = 0;
   let prefilteredOut = 0;
