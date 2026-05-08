@@ -1,60 +1,64 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { headers } from "next/headers";
+import Counters from "@/components/Counters";
+import CountryTable from "@/components/CountryTable";
+import NewsFeed from "@/components/NewsFeed";
+import HantaMap from "@/components/Map";
 import { Badge } from "@/components/ui/badge";
+import type { CasesResponse, NewsResponse } from "@/lib/api/types";
 
-export default function Home() {
+export const revalidate = 120;
+
+async function origin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+async function loadCases(): Promise<CasesResponse> {
+  const o = await origin();
+  const res = await fetch(`${o}/api/cases`, { next: { revalidate: 300 } });
+  if (!res.ok) throw new Error(`/api/cases ${res.status}`);
+  return res.json();
+}
+
+async function loadNews(): Promise<NewsResponse> {
+  const o = await origin();
+  const res = await fetch(`${o}/api/news?page=0`, { next: { revalidate: 120 } });
+  if (!res.ok) throw new Error(`/api/news ${res.status}`);
+  return res.json();
+}
+
+export default async function Page() {
+  const [cases, news] = await Promise.all([loadCases(), loadNews()]);
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-5xl px-6 py-16">
-        <header className="mb-12">
-          <Badge variant="outline" className="mb-3">v0 — scaffolding</Badge>
-          <h1 className="text-4xl font-bold tracking-tight">Hantavirus Tracker</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
-            Public dashboard ingesting global news and social feeds, extracting
-            confirmed hantavirus case data via an LLM pipeline, and rendering a
-            live heatmap.
+      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12 space-y-8">
+        <header className="space-y-2">
+          <Badge variant="outline">v0 — public beta</Badge>
+          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Hantavirus Tracker</h1>
+          <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
+            Confirmed human hantavirus case data extracted from public news and authoritative
+            outbreak surveillance feeds (WHO Disease Outbreak News, GDELT, PAHO, Google News) by
+            an LLM extractor and surfaced here. <strong>Not an official surveillance source.</strong>{" "}
+            See <a className="underline underline-offset-2" href="/about">methodology</a>.
           </p>
         </header>
 
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cases (global)</CardTitle>
-              <CardDescription>placeholder</CardDescription>
-            </CardHeader>
-            <CardContent className="text-3xl font-semibold">—</CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Deaths</CardTitle>
-              <CardDescription>placeholder</CardDescription>
-            </CardHeader>
-            <CardContent className="text-3xl font-semibold">—</CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Countries</CardTitle>
-              <CardDescription>placeholder</CardDescription>
-            </CardHeader>
-            <CardContent className="text-3xl font-semibold">—</CardContent>
-          </Card>
+        <Counters totals={cases.totals} range={cases.range} />
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">Geographic distribution</h2>
+          <HantaMap points={cases.points} />
         </section>
 
-        <section className="mt-12">
-          <Card>
-            <CardHeader>
-              <CardTitle>Build status</CardTitle>
-              <CardDescription>Session 1 — project skeleton</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                <li>✓ Next.js 16 + Tailwind + shadcn/ui wired</li>
-                <li>✓ Vercel deployment + GitHub auto-deploy</li>
-                <li>✓ Supabase client stubs ready (waiting on project)</li>
-                <li>· Next: Supabase project + migration + ingestion fetchers</li>
-              </ul>
-            </CardContent>
-          </Card>
-        </section>
+        <CountryTable rows={cases.countries} />
+
+        <NewsFeed items={news.items} />
+
+        <footer className="pt-8 text-xs text-muted-foreground">
+          Data refresh: hourly. Window: {cases.range.from} → {cases.range.to}. Confidence threshold: {cases.filters.minConfidence}.
+        </footer>
       </div>
     </main>
   );

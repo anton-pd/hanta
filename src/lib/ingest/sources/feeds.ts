@@ -31,11 +31,11 @@ export const promedFetcher = makeRssFetcher({
   language: "en",
 });
 
-// Google News RSS — multi-language hantavirus search
+// Google News RSS — English only per scope decision (reduces volume; loses
+// some Latin-America-specific Spanish/Portuguese coverage where hantavirus
+// is most endemic, but cuts ingest volume by ~3× and LLM cost proportionally).
 const GOOGLE_NEWS_LANGS: Array<{ hl: string; gl: string; ceid: string; lang: string; q: string }> = [
   { hl: "en-US", gl: "US", ceid: "US:en", lang: "en", q: "hantavirus" },
-  { hl: "es", gl: "AR", ceid: "AR:es", lang: "es", q: "hantavirus" },
-  { hl: "pt-BR", gl: "BR", ceid: "BR:pt-419", lang: "pt", q: "hantavírus" },
 ];
 
 export const googleNewsFetchers = GOOGLE_NEWS_LANGS.map(({ hl, gl, ceid, lang, q }) =>
