@@ -47,6 +47,8 @@ export const gdeltFetcher: Fetcher = async () => {
     }
     for (const a of data.articles ?? []) {
       if (!a.url) continue;
+      // English-only per scope decision; GDELT returns full language names
+      if (a.language && !/^en/i.test(a.language) && a.language !== "English") continue;
       items.push({
         url: a.url,
         title: a.title ?? null,
