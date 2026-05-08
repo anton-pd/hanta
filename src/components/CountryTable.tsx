@@ -29,7 +29,13 @@ export default function CountryTable({ rows }: { rows: CountryAgg[] }) {
           </div>
           {rows.map((r) => {
             const total = r.cases_confirmed + r.cases_suspected;
-            const cfr = r.cases_confirmed > 0 ? `${Math.round((100 * r.deaths) / r.cases_confirmed)}%` : "—";
+            // CFR only meaningful when deaths can be matched to confirmed cases.
+            // When reported deaths exceed confirmed (i.e. some are presumed without
+            // lab confirmation), show — instead of an inflated >100% rate.
+            const cfr =
+              r.cases_confirmed > 0 && r.deaths <= r.cases_confirmed
+                ? `${Math.round((100 * r.deaths) / r.cases_confirmed)}%`
+                : "—";
             const confW = `${(r.cases_confirmed / max) * 100}%`;
             const suspW = `${(r.cases_suspected / max) * 100}%`;
             return (

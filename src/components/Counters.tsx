@@ -35,9 +35,11 @@ function Stat({ label, value, sub, Icon, tone }: StatProps) {
 export default function Counters({ totals }: { totals: CasesResponse["totals"] }) {
   const fmt = (n: number) => n.toLocaleString("en-US");
   const cfr =
-    totals.cases_confirmed > 0
+    totals.cases_confirmed > 0 && totals.deaths <= totals.cases_confirmed
       ? `${((100 * totals.deaths) / totals.cases_confirmed).toFixed(0)}% case-fatality`
-      : "—";
+      : totals.deaths > 0
+        ? "incl. presumed"
+        : "—";
   return (
     <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
       <Stat label="Confirmed" value={fmt(totals.cases_confirmed)} sub="laboratory-confirmed" Icon={Activity} tone="amber" />
