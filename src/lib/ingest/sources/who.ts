@@ -27,7 +27,7 @@ export const whoFetcher: Fetcher = async () => {
   try {
     const res = await fetch(ENDPOINT, {
       headers: { "User-Agent": "hanta-tracker (anton.leshchenko88@gmail.com)" },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) {
       errors.push(`who: HTTP ${res.status}`);
