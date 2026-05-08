@@ -8,28 +8,19 @@ export const pahoFetcher = makeRssFetcher({
   filter: onlyHanta,
 });
 
-// CDC Health Alert Network RSS
-export const cdcFetcher = makeRssFetcher({
-  source: "cdc",
-  url: "https://emergency.cdc.gov/han/rss.asp",
-  language: "en",
-  filter: onlyHanta,
-});
+// CDC Health Alert Network — RSS retired by CDC (https://emergency.cdc.gov/han/rss.asp
+// 301-redirects to a generic page; tools.cdc.gov topic feed for hantavirus
+// returns empty). HAN advisories now publish only via the HAN page or email.
+// Re-enable if/when CDC restores a feed; for now WHO/PAHO cover the same ground.
 
-// ECDC Communicable Disease Threats Report (weekly)
-export const ecdcFetcher = makeRssFetcher({
-  source: "ecdc",
-  url: "https://www.ecdc.europa.eu/en/threats-and-outbreaks/feed",
-  language: "en",
-  filter: onlyHanta,
-});
+// ECDC — all RSS endpoints (threats-and-outbreaks/feed, communicable-disease-
+// threats-report/rss.xml, news-events/rss) return 404 after their 2025 site
+// refactor. Their CSV/Excel downloads still exist but are heavier to ingest.
+// Parked.
 
-// ProMED-mail — gold standard outbreak surveillance, hantavirus channel
-export const promedFetcher = makeRssFetcher({
-  source: "promed",
-  url: "https://promedmail.org/promed-posts/rss/?subject=hantavirus",
-  language: "en",
-});
+// ProMED-mail — promedmail.org RSS chain redirects to /promed-posts/rss?...
+// which returns 404. They appear to require an account or have killed RSS.
+// Parked; would need either a paid feed or the bi-weekly email.
 
 // Google News RSS — English only per scope decision (reduces volume; loses
 // some Latin-America-specific Spanish/Portuguese coverage where hantavirus

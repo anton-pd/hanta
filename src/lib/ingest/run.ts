@@ -2,13 +2,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import type { Fetcher, FetcherResult } from "./types";
 import { whoFetcher } from "./sources/who";
 import { gdeltFetcher } from "./sources/gdelt";
-import {
-  pahoFetcher,
-  cdcFetcher,
-  ecdcFetcher,
-  promedFetcher,
-  googleNewsFetchers,
-} from "./sources/feeds";
+import { pahoFetcher, googleNewsFetchers } from "./sources/feeds";
 import { redditFetcher } from "./sources/reddit";
 import { blueskyFetcher } from "./sources/bluesky";
 import { upsertSources } from "./upsert";
@@ -18,9 +12,6 @@ const FETCHERS: Fetcher[] = [
   whoFetcher,
   gdeltFetcher,
   pahoFetcher,
-  cdcFetcher,
-  ecdcFetcher,
-  promedFetcher,
   ...googleNewsFetchers,
   redditFetcher,
   blueskyFetcher,

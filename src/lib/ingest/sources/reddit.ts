@@ -1,62 +1,46 @@
+import Parser from "rss-parser";
 import type { Fetcher, RawItem } from "../types";
 
-interface RedditChild {
-  data: {
-    permalink?: string;
-    url?: string;
-    title?: string;
-    selftext?: string;
-    created_utc?: number;
-    subreddit?: string;
-  };
-}
-
-interface RedditResponse {
-  data?: { children?: RedditChild[] };
-}
-
+// Reddit's JSON search endpoints all 403 unauthenticated as of mid-2026.
+// /search.rss is still public but Reddit fingerprints the User-Agent and
+// rejects rss-parser's default UA — fetch manually with a browser-ish UA
+// then hand the body to rss-parser via parseString.
 const ENDPOINT =
-  "https://www.reddit.com/r/worldnews+Health+medicine+Epidemiology/search.json?q=hantavirus&restrict_sr=1&t=week&limit=50&sort=new";
+  "https://www.reddit.com/search.rss?q=hantavirus&restrict_sr=on&sort=new&t=month";
+
+const UA =
+  "Mozilla/5.0 (compatible; hanta-tracker/0.1; +https://hanta-mu.vercel.app; anton.leshchenko88@gmail.com)";
 
 export const redditFetcher: Fetcher = async () => {
   const errors: string[] = [];
   const items: RawItem[] = [];
   try {
     const res = await fetch(ENDPOINT, {
-      headers: {
-        "User-Agent": "hanta-tracker/0.1 (anton.leshchenko88@gmail.com)",
-        "Accept": "application/json",
-      },
+      headers: { "User-Agent": UA, Accept: "application/atom+xml,application/xml,*/*" },
       signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) {
       errors.push(`reddit: HTTP ${res.status}`);
       return { source: "reddit", items, errors };
     }
-    const data = (await res.json()) as RedditResponse;
-    for (const c of data.data?.children ?? []) {
-      const d = c.data;
-      if (!d.permalink) continue;
-      const url = `https://www.reddit.com${d.permalink}`;
+    const xml = await res.text();
+    const parser = new Parser({ timeout: 20000 });
+    const feed = await parser.parseString(xml);
+    for (const e of feed.items) {
+      if (!e.link) continue;
       items.push({
-        url,
-        title: d.title ?? null,
-        body: d.selftext || null,
-        published_at: d.created_utc
-          ? new Date(d.created_utc * 1000).toISOString()
-          : null,
+        url: e.link,
+        title: e.title ?? null,
+        body: e.contentSnippet || e.content || null,
+        published_at:
+          e.isoDate ?? (e.pubDate ? new Date(e.pubDate).toISOString() : null),
         language: "en",
         source_type: "reddit",
-        raw: { external_url: d.url ?? null, subreddit: d.subreddit ?? null },
+        raw: { author: e.creator ?? null, categories: e.categories ?? [] },
       });
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const cause =
-      e instanceof Error && e.cause
-        ? ` | cause: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`
-        : "";
-    errors.push(`reddit: ${msg}${cause}`);
+    errors.push(`reddit: ${e instanceof Error ? e.message : String(e)}`);
   }
   return { source: "reddit", items, errors };
 };

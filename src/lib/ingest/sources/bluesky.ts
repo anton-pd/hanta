@@ -21,8 +21,9 @@ function postUrl(uri: string, handle: string | undefined): string {
   return `https://bsky.app/profile/${slug}/post/${id}`;
 }
 
+// Was public.api.bsky.app (now 403). The non-prefixed api.bsky.app works.
 const ENDPOINT =
-  "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=hantavirus&limit=50&sort=latest";
+  "https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=hantavirus&limit=50&sort=latest";
 
 export const blueskyFetcher: Fetcher = async () => {
   const errors: string[] = [];
