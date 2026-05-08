@@ -4,7 +4,8 @@ import Counters from "@/components/Counters";
 import CountryTable from "@/components/CountryTable";
 import NewsFeed from "@/components/NewsFeed";
 import HantaMap from "@/components/Map";
-import type { CasesResponse, NewsItem, NewsResponse } from "@/lib/api/types";
+import HistoricalTimeline from "@/components/HistoricalTimeline";
+import type { CasesResponse, HistoricalResponse, NewsItem, NewsResponse } from "@/lib/api/types";
 
 export const revalidate = 120;
 
@@ -29,8 +30,15 @@ async function loadNews(): Promise<NewsResponse> {
   return res.json();
 }
 
+async function loadHistorical(): Promise<HistoricalResponse> {
+  const o = await origin();
+  const res = await fetch(`${o}/api/historical`, { next: { revalidate: 3600 } });
+  if (!res.ok) throw new Error(`/api/historical ${res.status}`);
+  return res.json();
+}
+
 export default async function Page() {
-  const [cases, news] = await Promise.all([loadCases(), loadNews()]);
+  const [cases, news, historical] = await Promise.all([loadCases(), loadNews(), loadHistorical()]);
   const topCountry = cases.countries[0] ?? null;
   const latestRelevant: NewsItem | null = news.items.find((i) => i.case_reports.length > 0) ?? null;
   const lastUpdated = news.items[0]?.published_at ?? null;
@@ -61,6 +69,8 @@ export default async function Page() {
         <CountryTable rows={cases.countries} />
 
         <NewsFeed items={news.items} />
+
+        <HistoricalTimeline items={historical.items} />
 
         <footer className="border-t border-border/40 pt-6 text-xs text-muted-foreground">
           <p>
