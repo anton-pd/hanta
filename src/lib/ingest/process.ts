@@ -34,27 +34,32 @@ export async function processUnextractedSources(): Promise<ProcessSummary> {
   // Sources without any extraction row (left-anti-join via NOT IN subquery).
   // PostgREST doesn't support NOT IN with subselects directly — fetch in two
   // steps: candidate sources, then filter out ones with extractions.
-  // High-authority sources (WHO, PAHO, CDC, ECDC, ProMED) processed first.
-  // GDELT/news aggregators last because their titles alone rarely pass prefilter.
-  const AUTHORITY_RANK: Record<string, number> = {
-    who: 0, paho: 0, cdc: 0, ecdc: 0, promed: 0,
-    bluesky: 1, reddit: 1, google_news: 1, gdelt: 2,
-  };
-  const { data: rawCandidates, error: e1 } = await sb
-    .from("unextracted_sources")
-    .select("id,url,title,body,published_at,source_type")
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(MAX_PER_RUN * 2);
-  if (e1) throw new Error(`load unextracted_sources: ${e1.message}`);
-  const todo: SourceRow[] = (rawCandidates ?? [])
-    .slice()
-    .sort((a, b) => {
-      const ra = AUTHORITY_RANK[a.source_type as string] ?? 9;
-      const rb = AUTHORITY_RANK[b.source_type as string] ?? 9;
-      if (ra !== rb) return ra - rb;
-      return (b.published_at ?? "").localeCompare(a.published_at ?? "");
-    })
-    .slice(0, MAX_PER_RUN);
+  // Two-pass query: pull all high-authority sources first (small set; never
+  // truncated by LIMIT), then top up with newest aggregator items. A single
+  // query with ORDER BY published_at LIMIT 400 silently dropped older WHO
+  // articles when newer GDELT/google_news flooded the front of the queue.
+  const HIGH_AUTHORITY = ["who", "paho", "cdc", "ecdc", "promed"];
+
+  const [authRes, restRes] = await Promise.all([
+    sb
+      .from("unextracted_sources")
+      .select("id,url,title,body,published_at,source_type")
+      .in("source_type", HIGH_AUTHORITY)
+      .order("published_at", { ascending: false, nullsFirst: false }),
+    sb
+      .from("unextracted_sources")
+      .select("id,url,title,body,published_at,source_type")
+      .not("source_type", "in", `(${HIGH_AUTHORITY.join(",")})`)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(MAX_PER_RUN),
+  ]);
+  if (authRes.error) throw new Error(`load high-authority: ${authRes.error.message}`);
+  if (restRes.error) throw new Error(`load aggregator: ${restRes.error.message}`);
+
+  const todo: SourceRow[] = [...(authRes.data ?? []), ...(restRes.data ?? [])].slice(
+    0,
+    MAX_PER_RUN,
+  );
 
   if (todo.length === 0) {
     return {
