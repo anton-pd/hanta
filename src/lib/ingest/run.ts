@@ -2,6 +2,7 @@ import type { Fetcher, FetcherResult } from "./types";
 import { whoFetcher } from "./sources/who";
 import { gdeltFetcher } from "./sources/gdelt";
 import { upsertSources } from "./upsert";
+import { processUnextractedSources, type ProcessSummary } from "./process";
 
 const FETCHERS: Fetcher[] = [whoFetcher, gdeltFetcher];
 
@@ -15,6 +16,7 @@ export interface IngestRunSummary {
   }>;
   total_inserted: number;
   total_fetched: number;
+  extraction: ProcessSummary;
   duration_ms: number;
 }
 
@@ -50,10 +52,32 @@ export async function runIngest(): Promise<IngestRunSummary> {
     });
   }
 
+  let extraction: ProcessSummary;
+  try {
+    extraction = await processUnextractedSources();
+  } catch (e) {
+    extraction = {
+      scanned: 0,
+      prefiltered_out: 0,
+      extracted: 0,
+      case_reports_inserted: 0,
+      cost_usd: 0,
+      errors: 1,
+    };
+    per_source.push({
+      source: "extraction",
+      fetched: 0,
+      inserted: 0,
+      skipped: 0,
+      errors: [e instanceof Error ? e.message : String(e)],
+    });
+  }
+
   return {
     per_source,
     total_inserted,
     total_fetched,
+    extraction,
     duration_ms: Date.now() - t0,
   };
 }
