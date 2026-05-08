@@ -55,6 +55,10 @@ export async function persistExtraction(
   const rows = [];
   for (const ev of accepted) {
     const geo = await geocode(ev.locality, ev.region, ev.country_iso2);
+    // Safety net: deaths can never exceed confirmed cases (a lab-confirmed
+    // dead person is still a confirmed case). If LLM returns mismatched
+    // numbers, raise confirmed to at least equal deaths.
+    const cases_confirmed = Math.max(ev.cases_confirmed, ev.deaths);
     rows.push({
       source_id: sourceId,
       country_iso2: (geo.country_iso2 || ev.country_iso2).toUpperCase(),
@@ -62,7 +66,7 @@ export async function persistExtraction(
       locality: ev.locality,
       lat: geo.lat,
       lon: geo.lon,
-      cases_confirmed: ev.cases_confirmed,
+      cases_confirmed,
       cases_suspected: ev.cases_suspected,
       deaths: ev.deaths,
       report_date: ev.report_date,
