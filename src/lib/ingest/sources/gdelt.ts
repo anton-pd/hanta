@@ -58,7 +58,12 @@ export const gdeltFetcher: Fetcher = async () => {
       });
     }
   } catch (e) {
-    errors.push(`gdelt: ${e instanceof Error ? e.message : String(e)}`);
+    const msg = e instanceof Error ? e.message : String(e);
+    const cause =
+      e instanceof Error && e.cause
+        ? ` | cause: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`
+        : "";
+    errors.push(`gdelt: ${msg}${cause}`);
   }
   return { source: "gdelt", items, errors };
 };
