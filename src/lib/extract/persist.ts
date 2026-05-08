@@ -73,16 +73,18 @@ export async function persistExtraction(
     });
   }
 
-  // Plain insert — re-running on same source is prevented by the extractions
-  // table (we never re-extract a source). The dedupe-on-(source,country,region,
-  // date) index in the migration uses a coalesce expression Postgres won't
-  // accept as an ON CONFLICT target, so we don't upsert here.
-  const { error } = await sb.from("case_reports").insert(rows);
-
-  if (error) {
-    // Don't throw — we already logged extraction; return zero inserts
-    return { inserted_case_reports: 0, rejected_low_confidence: rejected };
+  // Insert one row at a time so a unique-index conflict on one event doesn't
+  // sink the others. The dedupe index uses a coalesce(region,'') expression
+  // that Postgres won't accept as an ON CONFLICT target, so we can't use
+  // upsert; per-row insert + ignore 23505 (unique_violation) is the simplest
+  // resilient pattern.
+  let inserted = 0;
+  for (const row of rows) {
+    const { error } = await sb.from("case_reports").insert(row);
+    if (!error) inserted++;
+    else if (error.code !== "23505") {
+      // log non-conflict errors via extractions audit later if needed
+    }
   }
-
-  return { inserted_case_reports: accepted.length, rejected_low_confidence: rejected };
+  return { inserted_case_reports: inserted, rejected_low_confidence: rejected };
 }
